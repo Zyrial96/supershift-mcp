@@ -30,7 +30,7 @@ shift, and summarize hours from an exported calendar.
 ## Install
 
 ```bash
-python3 -m pip install supershift-mcp
+python3 -m pip install "git+https://github.com/Zyrial96/supershift-mcp.git"
 ```
 
 For local development:
