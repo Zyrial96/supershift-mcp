@@ -84,8 +84,21 @@ Available tools:
 
 - `calendar_status(calendar: str | None = None)`
 - `list_shifts(start: str, end: str, calendar: str | None = None)`
+- `filter_shifts(start: str, end: str, calendar: str | None = None, title_contains: str | None = None, location_contains: str | None = None, notes_contains: str | None = None, min_hours: float | None = None, max_hours: float | None = None)`
+- `get_shift(uid: str, calendar: str | None = None)`
+- `current_shift(at: str | None = None, calendar: str | None = None)`
+- `shifts_on_date(day: str, calendar: str | None = None)`
 - `next_shift(after: str | None = None, days: int = 90, calendar: str | None = None)`
 - `summarize_shifts(start: str, end: str, calendar: str | None = None)`
+- `summarize_by_period(start: str, end: str, period: str = "day", calendar: str | None = None, include_all_day: bool = False)`
+- `detect_conflicts(start: str, end: str, calendar: str | None = None)`
+- `rest_periods(start: str, end: str, calendar: str | None = None, minimum_hours: float = 11)`
+- `free_days(start: str, end: str, calendar: str | None = None)`
+- `export_shifts(start: str, end: str, output_format: str = "json", calendar: str | None = None)`
+- `estimate_pay(start: str, end: str, hourly_rate: float, calendar: str | None = None, title_rates: dict[str, float] | None = None, currency: str = "EUR", include_all_day: bool = False)`
+- `shift_titles(calendar: str | None = None)`
+- `shift_locations(calendar: str | None = None)`
+- `upcoming_shifts(days: int = 14, calendar: str | None = None)`
 
 ## Run HTTP API
 
@@ -105,8 +118,20 @@ Endpoints:
 
 - `GET /health`
 - `GET /shifts?start=2026-06-01&end=2026-07-01`
+- `GET /shifts/filter?start=2026-06-01&end=2026-07-01&title_contains=Night`
+- `GET /shifts/current`
 - `GET /shifts/next?days=30`
+- `GET /shifts/date/2026-06-21`
+- `GET /shifts/{uid}`
 - `GET /summary?start=2026-06-01&end=2026-07-01`
+- `GET /summary/period?start=2026-06-01&end=2026-07-01&period=week`
+- `GET /conflicts?start=2026-06-01&end=2026-07-01`
+- `GET /rest-periods?start=2026-06-01&end=2026-07-01`
+- `GET /free-days?start=2026-06-01&end=2026-07-01`
+- `GET /export?start=2026-06-01&end=2026-07-01&output_format=csv`
+- `GET /pay?start=2026-06-01&end=2026-07-01&hourly_rate=20`
+- `GET /titles`
+- `GET /locations`
 
 ## Boundaries
 
