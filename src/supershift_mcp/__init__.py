@@ -16,8 +16,10 @@ from supershift_mcp.calendar import (
     summarize_by_period,
     summarize_shifts,
 )
+from supershift_mcp.writer import ShiftDraft, parse_shift_text
 
 __all__ = [
+    "ShiftDraft",
     "Shift",
     "current_shift",
     "detect_conflicts",
@@ -32,4 +34,5 @@ __all__ = [
     "shifts_on_date",
     "summarize_by_period",
     "summarize_shifts",
+    "parse_shift_text",
 ]

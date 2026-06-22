@@ -232,6 +232,14 @@ Sobald der MCP in deinem Client verbunden ist, kannst du zum Beispiel fragen:
 | `estimate_pay` | Grobe Lohnschaetzung berechnen |
 | `shift_titles` | Alle Diensttitel ausgeben |
 | `shift_locations` | Alle Dienstorte ausgeben |
+| `parse_shifts_text` | Freitext in schreibbare Dienste umwandeln |
+| `validate_shifts_for_write` | Schreibdaten validieren |
+| `android_device_status` | ADB-Geraete anzeigen |
+| `supershift_app_status` | Supershift Installation auf Android pruefen |
+| `dump_supershift_ui` | Aktuelle Supershift-UI als XML dumpen |
+| `preview_supershift_write` | Schreibplan ohne Ausfuehrung erzeugen |
+| `create_supershift_shifts` | Strukturierte Dienste ueber Backend eintragen |
+| `create_supershift_shifts_from_text` | Freitext parsen und ueber Backend eintragen |
 
 ### Tool-Gruppen
 
@@ -259,6 +267,15 @@ mindmap
     Ausgabe
       export_shifts
       estimate_pay
+    Schreiben
+      parse_shifts_text
+      validate_shifts_for_write
+      android_device_status
+      supershift_app_status
+      dump_supershift_ui
+      preview_supershift_write
+      create_supershift_shifts
+      create_supershift_shifts_from_text
 ```
 
 ## Tool-Beispiele
@@ -343,6 +360,184 @@ mindmap
 }
 ```
 
+## Dienste in Supershift eintragen
+
+Es gibt aktuell keinen dokumentierten Supershift-Write-API-Endpunkt. Die App ist
+laut oeffentlichen Beschreibungen bewusst lokal nutzbar und benoetigt keinen
+Account und kein Internet. Der realistische Schreibweg ist deshalb Android
+UI-Automation ueber ADB: Der MCP kann Supershift starten, UI-Informationen
+auslesen, einen Klick-/Textplan erzeugen und diesen erst nach expliziter
+Freigabe ausfuehren.
+
+```mermaid
+flowchart TD
+    A[Du sagst dem KI-Client deine Dienste] --> B[parse_shifts_text]
+    B --> C[validate_shifts_for_write]
+    C --> D[dump_supershift_ui]
+    D --> E[UI-Profil anpassen]
+    E --> F[preview_supershift_write]
+    F --> G{Plan korrekt?}
+    G -->|Nein| E
+    G -->|Ja| H[SUPERSHIFT_WRITE_ENABLED=1]
+    H --> I[create_supershift_shifts_from_text dry_run=false]
+    I --> J[Supershift enthaelt neue Dienste]
+```
+
+### Warum ein UI-Profil?
+
+Supershift hat keine stabile oeffentliche Schreib-API. Android-UI-Automation
+braucht deshalb ein Profil, das beschreibt, welche Schaltflaechen und Felder auf
+deinem Geraet in welcher Reihenfolge bedient werden. Das Beispielprofil liegt in
+[`examples/supershift-ui-profile.example.json`](examples/supershift-ui-profile.example.json).
+
+Platzhalter im Profil:
+
+| Platzhalter | Bedeutung |
+| --- | --- |
+| `{title}` | Dienstname |
+| `{date}` | Datum im Format `YYYY-MM-DD` |
+| `{start_time}` | Startzeit `HH:MM` |
+| `{end_time}` | Endzeit `HH:MM` |
+| `{location}` | Ort, falls angegeben |
+| `{notes}` | Notiz, falls angegeben |
+
+Unterstuetzte Aktionen:
+
+| Aktion | Beispiel |
+| --- | --- |
+| `tap` | `{"action": "tap", "x": 980, "y": 1840}` |
+| `text` | `{"action": "text", "value": "{title}"}` |
+| `keyevent` | `{"action": "keyevent", "key": "TAB"}` |
+| `swipe` | `{"action": "swipe", "x1": 500, "y1": 1600, "x2": 500, "y2": 500}` |
+| `wait` | `{"action": "wait", "seconds": 0.5}` |
+
+### 1. Android vorbereiten
+
+1. Android-Entwickleroptionen aktivieren.
+2. USB-Debugging aktivieren.
+3. Smartphone per USB verbinden.
+4. Den ADB-Fingerprint auf dem Smartphone erlauben.
+5. Pruefen:
+
+```bash
+adb devices -l
+```
+
+Im MCP:
+
+```json
+{
+  "tool": "android_device_status",
+  "arguments": {}
+}
+```
+
+### 2. Supershift pruefen und UI dumpen
+
+```json
+{
+  "tool": "supershift_app_status",
+  "arguments": {}
+}
+```
+
+Dann:
+
+```json
+{
+  "tool": "dump_supershift_ui",
+  "arguments": {}
+}
+```
+
+Der UI-Dump zeigt sichtbare Texte, Ressourcen-IDs und Bounds. Daraus kannst du
+das Profil ableiten. Wenn Supershift keine Ressourcen-IDs liefert, sind
+Koordinaten der pragmatische Weg.
+
+### 3. Dienste als Text angeben
+
+Format:
+
+```text
+24.06.2026 06:00-14:00 Fruehdienst @ Station A # Team alpha
+25.06.2026 14:00-22:00 Spaetdienst
+26.06.2026 22:00-06:00 Nachtdienst
+```
+
+Parser testen:
+
+```json
+{
+  "tool": "parse_shifts_text",
+  "arguments": {
+    "text": "24.06.2026 06:00-14:00 Fruehdienst @ Station A # Team alpha"
+  }
+}
+```
+
+Nachtdienste, die nach Mitternacht enden, werden automatisch auf den Folgetag
+gesetzt.
+
+### 4. Schreibplan trocken testen
+
+```json
+{
+  "tool": "create_supershift_shifts_from_text",
+  "arguments": {
+    "text": "24.06.2026 06:00-14:00 Fruehdienst @ Station A # Team alpha",
+    "backend": "adb_ui",
+    "profile_path": "examples/supershift-ui-profile.example.json",
+    "dry_run": true
+  }
+}
+```
+
+Der Dry-Run gibt die geplanten ADB-Befehle aus, ohne dein Smartphone zu
+bedienen.
+
+### 5. Echte Ausfuehrung aktivieren
+
+Erst wenn der Plan korrekt ist:
+
+```bash
+export SUPERSHIFT_WRITE_ENABLED=1
+```
+
+Dann:
+
+```json
+{
+  "tool": "create_supershift_shifts_from_text",
+  "arguments": {
+    "text": "24.06.2026 06:00-14:00 Fruehdienst @ Station A # Team alpha",
+    "backend": "adb_ui",
+    "profile_path": "examples/supershift-ui-profile.example.json",
+    "dry_run": false
+  }
+}
+```
+
+### Fallback: Android Calendar Intent
+
+Der Backend-Wert `android_calendar_intent` oeffnet Androids generische
+Kalender-Eintragsmaske. Das ist kein direkter Supershift-Schreibweg, kann aber
+als Notausgang dienen, wenn du Dienste zuerst in einen Kalender schreiben
+willst:
+
+```json
+{
+  "tool": "create_supershift_shifts_from_text",
+  "arguments": {
+    "text": "24.06.2026 06:00-14:00 Fruehdienst",
+    "backend": "android_calendar_intent",
+    "dry_run": true
+  }
+}
+```
+
+Der MCP kennzeichnet diesen Weg bewusst als Warnung, weil er nicht direkt in
+Supershift schreibt.
+
 ## HTTP API verwenden
 
 Die HTTP-API ist optional. Installiere das API-Extra:
@@ -383,6 +578,13 @@ http://127.0.0.1:8765
 | `GET /pay` | `curl "http://127.0.0.1:8765/pay?start=2026-06-01&end=2026-07-01&hourly_rate=22"` |
 | `GET /titles` | `curl "http://127.0.0.1:8765/titles"` |
 | `GET /locations` | `curl "http://127.0.0.1:8765/locations"` |
+| `POST /write/parse` | Freitext in Dienste parsen |
+| `POST /write/validate` | Dienste validieren |
+| `GET /android/status` | ADB-Geraete anzeigen |
+| `GET /android/supershift` | Supershift App-Status pruefen |
+| `GET /android/supershift/ui` | Supershift UI XML dumpen |
+| `POST /write/supershift` | Strukturierte Dienste schreiben |
+| `POST /write/supershift/text` | Freitext parsen und schreiben |
 
 ## Datums- und Zeitformat
 
@@ -443,9 +645,12 @@ veroeffentlicht, kann ein echter Schreib-Adapter ergaenzt werden.
 Nicht enthalten:
 
 - Login in Supershift Cloud Sync
-- Reverse Engineering privater Supershift-Endpunkte
-- Direkte Android-App-Automation
-- Automatisches Veraendern deiner Dienste in Supershift
+- Reverse Engineering privater Supershift-Endpunkte oder Umgehung von Schutzmechanismen
+- Blindes Veraendern deiner Dienste ohne Dry-Run und explizite Schreibfreigabe
+
+Enthalten ist dagegen eine kontrollierte Android-UI-Automation ueber ADB, die
+du mit deinem eigenen Geraet, deiner installierten App und einem UI-Profil
+verwenden kannst. Das ist absichtlich transparent und abschaltbar gebaut.
 
 ## Entwicklung
 

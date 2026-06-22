@@ -1,0 +1,68 @@
+{
+  "package": "app.supershift",
+  "description": "Example only. Replace coordinates and steps with values from your device after running dump_supershift_ui.",
+  "steps": [
+    {
+      "action": "tap",
+      "x": 980,
+      "y": 1840
+    },
+    {
+      "action": "wait",
+      "seconds": 0.5
+    },
+    {
+      "action": "text",
+      "value": "{title}"
+    },
+    {
+      "action": "keyevent",
+      "key": "TAB"
+    },
+    {
+      "action": "text",
+      "value": "{date}"
+    },
+    {
+      "action": "keyevent",
+      "key": "TAB"
+    },
+    {
+      "action": "text",
+      "value": "{start_time}"
+    },
+    {
+      "action": "keyevent",
+      "key": "TAB"
+    },
+    {
+      "action": "text",
+      "value": "{end_time}"
+    },
+    {
+      "action": "keyevent",
+      "key": "TAB"
+    },
+    {
+      "action": "text",
+      "value": "{location}"
+    },
+    {
+      "action": "keyevent",
+      "key": "TAB"
+    },
+    {
+      "action": "text",
+      "value": "{notes}"
+    },
+    {
+      "action": "tap",
+      "x": 920,
+      "y": 160
+    },
+    {
+      "action": "wait",
+      "seconds": 0.5
+    }
+  ]
+}

@@ -18,6 +18,16 @@ from supershift_mcp.calendar import shifts_on_date as read_shifts_on_date
 from supershift_mcp.calendar import summarize_by_period as summarize_calendar_by_period
 from supershift_mcp.calendar import summarize_shifts as summarize_calendar
 from supershift_mcp.calendar import unique_locations, unique_titles
+from supershift_mcp.writer import android_device_status as read_android_device_status
+from supershift_mcp.writer import build_android_calendar_intents
+from supershift_mcp.writer import build_ui_automation_plan
+from supershift_mcp.writer import create_supershift_shifts as write_supershift_shifts
+from supershift_mcp.writer import create_supershift_shifts_from_text as write_supershift_shifts_from_text
+from supershift_mcp.writer import dump_supershift_ui as read_supershift_ui
+from supershift_mcp.writer import load_ui_profile
+from supershift_mcp.writer import parse_shift_text as parse_shift_lines
+from supershift_mcp.writer import supershift_app_status as read_supershift_app_status
+from supershift_mcp.writer import validate_shift_drafts
 
 try:
     from mcp.server.mcpserver import MCPServer
@@ -178,6 +188,79 @@ def upcoming_shifts(days: int = 14, calendar: str | None = None) -> list[dict[st
     now = datetime.now(timezone.utc).astimezone()
     end = now + timedelta(days=days)
     return [shift.as_dict() for shift in read_shifts(now, end, calendar)]
+
+
+@mcp.tool()
+def parse_shifts_text(text: str, default_timezone: str = "+02:00") -> list[dict[str, Any]]:
+    """Parse text lines like '24.06.2026 06:00-14:00 Fruehdienst @ Ort # Notiz'."""
+    return [draft.as_dict() for draft in parse_shift_lines(text, default_timezone)]
+
+
+@mcp.tool()
+def validate_shifts_for_write(shifts: list[dict[str, Any]]) -> list[str]:
+    """Validate structured shifts before attempting a write backend."""
+    return validate_shift_drafts(shifts)
+
+
+@mcp.tool()
+def android_device_status() -> dict[str, Any]:
+    """Report connected Android devices visible through ADB."""
+    return read_android_device_status()
+
+
+@mcp.tool()
+def supershift_app_status() -> dict[str, Any]:
+    """Report whether app.supershift is installed on the connected Android device."""
+    return read_supershift_app_status()
+
+
+@mcp.tool()
+def dump_supershift_ui() -> dict[str, Any]:
+    """Launch Supershift and dump the current Android UI XML for profile creation."""
+    return read_supershift_ui()
+
+
+@mcp.tool()
+def preview_supershift_write(
+    shifts: list[dict[str, Any]],
+    backend: str = "adb_ui",
+    profile_path: str | None = None,
+) -> dict[str, Any]:
+    """Build a dry-run write plan for Supershift without touching the device."""
+    if backend == "adb_ui":
+        profile = load_ui_profile(profile_path)
+        return build_ui_automation_plan(shifts, profile)
+    if backend == "android_calendar_intent":
+        return {
+            "ok": True,
+            "backend": backend,
+            "commands": build_android_calendar_intents(shifts),
+            "warning": "This opens Android Calendar insert intents, not the Supershift app.",
+        }
+    raise ValueError("backend must be one of: adb_ui, android_calendar_intent.")
+
+
+@mcp.tool()
+def create_supershift_shifts(
+    shifts: list[dict[str, Any]],
+    backend: str = "adb_ui",
+    profile_path: str | None = None,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Create shifts through a configured backend. Defaults to dry-run."""
+    return write_supershift_shifts(shifts, backend, profile_path, dry_run)
+
+
+@mcp.tool()
+def create_supershift_shifts_from_text(
+    text: str,
+    backend: str = "adb_ui",
+    profile_path: str | None = None,
+    dry_run: bool = True,
+    default_timezone: str = "+02:00",
+) -> dict[str, Any]:
+    """Parse free text and create shifts through a configured backend. Defaults to dry-run."""
+    return write_supershift_shifts_from_text(text, backend, profile_path, dry_run, default_timezone=default_timezone)
 
 
 def main() -> None:

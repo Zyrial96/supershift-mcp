@@ -17,9 +17,17 @@ from supershift_mcp.calendar import shifts_on_date as read_shifts_on_date
 from supershift_mcp.calendar import summarize_by_period as summarize_calendar_by_period
 from supershift_mcp.calendar import summarize_shifts as summarize_calendar
 from supershift_mcp.calendar import unique_locations, unique_titles
+from supershift_mcp.writer import android_device_status as read_android_device_status
+from supershift_mcp.writer import create_supershift_shifts as write_supershift_shifts
+from supershift_mcp.writer import create_supershift_shifts_from_text as write_supershift_shifts_from_text
+from supershift_mcp.writer import dump_supershift_ui as read_supershift_ui
+from supershift_mcp.writer import parse_shift_text as parse_shift_lines
+from supershift_mcp.writer import supershift_app_status as read_supershift_app_status
+from supershift_mcp.writer import validate_shift_drafts
 
 try:
     from fastapi import FastAPI, Query, Response
+    from pydantic import BaseModel
 except ImportError as exc:  # pragma: no cover
     raise SystemExit("Install the API extra first: pip install 'supershift-mcp[api]'") from exc
 
@@ -29,6 +37,21 @@ app = FastAPI(
     description="Read-only API for Supershift-exported calendar data.",
     version="0.1.0",
 )
+
+
+class ShiftWriteRequest(BaseModel):
+    shifts: list[dict[str, Any]]
+    backend: str = "adb_ui"
+    profile_path: str | None = None
+    dry_run: bool = True
+
+
+class ShiftTextWriteRequest(BaseModel):
+    text: str
+    backend: str = "adb_ui"
+    profile_path: str | None = None
+    dry_run: bool = True
+    default_timezone: str = "+02:00"
 
 
 @app.get("/health")
@@ -159,6 +182,52 @@ def titles(calendar: str | None = Query(default=None)) -> list[str]:
 @app.get("/locations")
 def locations(calendar: str | None = Query(default=None)) -> list[str]:
     return unique_locations(calendar)
+
+
+@app.post("/write/parse")
+def parse_write_text(payload: ShiftTextWriteRequest) -> list[dict[str, Any]]:
+    return [draft.as_dict() for draft in parse_shift_lines(payload.text, payload.default_timezone)]
+
+
+@app.post("/write/validate")
+def validate_write_shifts(payload: ShiftWriteRequest) -> list[str]:
+    return validate_shift_drafts(payload.shifts)
+
+
+@app.get("/android/status")
+def android_status() -> dict[str, Any]:
+    return read_android_device_status()
+
+
+@app.get("/android/supershift")
+def android_supershift_status() -> dict[str, Any]:
+    return read_supershift_app_status()
+
+
+@app.get("/android/supershift/ui")
+def android_supershift_ui() -> dict[str, Any]:
+    return read_supershift_ui()
+
+
+@app.post("/write/supershift")
+def write_shifts(payload: ShiftWriteRequest) -> dict[str, Any]:
+    return write_supershift_shifts(
+        payload.shifts,
+        payload.backend,
+        payload.profile_path,
+        payload.dry_run,
+    )
+
+
+@app.post("/write/supershift/text")
+def write_shifts_from_text(payload: ShiftTextWriteRequest) -> dict[str, Any]:
+    return write_supershift_shifts_from_text(
+        payload.text,
+        payload.backend,
+        payload.profile_path,
+        payload.dry_run,
+        default_timezone=payload.default_timezone,
+    )
 
 
 def main() -> None:
