@@ -18,10 +18,20 @@ from supershift_mcp.calendar import summarize_by_period as summarize_calendar_by
 from supershift_mcp.calendar import summarize_shifts as summarize_calendar
 from supershift_mcp.calendar import unique_locations, unique_titles
 from supershift_mcp.writer import android_device_status as read_android_device_status
+from supershift_mcp.writer import build_cloud_crud_preview
+from supershift_mcp.writer import build_sqlite_insert_plan
 from supershift_mcp.writer import create_supershift_shifts as write_supershift_shifts
+from supershift_mcp.writer import create_supershift_shifts_sqlite as write_supershift_shifts_sqlite
+from supershift_mcp.writer import create_supershift_shifts_sqlite_from_text as write_supershift_shifts_sqlite_from_text
 from supershift_mcp.writer import create_supershift_shifts_from_text as write_supershift_shifts_from_text
 from supershift_mcp.writer import dump_supershift_ui as read_supershift_ui
+from supershift_mcp.writer import inspect_supershift_apk as read_supershift_apk
+from supershift_mcp.writer import install_supershift_apks as write_supershift_apks
 from supershift_mcp.writer import parse_shift_text as parse_shift_lines
+from supershift_mcp.writer import probe_supershift_deeplinks as run_supershift_deeplink_probe
+from supershift_mcp.writer import pull_supershift_data as run_supershift_data_pull
+from supershift_mcp.writer import reverse_engineering_report as read_reverse_engineering_report
+from supershift_mcp.writer import supershift_data_access_status as read_supershift_data_access_status
 from supershift_mcp.writer import supershift_app_status as read_supershift_app_status
 from supershift_mcp.writer import validate_shift_drafts
 
@@ -50,6 +60,42 @@ class ShiftTextWriteRequest(BaseModel):
     text: str
     backend: str = "adb_ui"
     profile_path: str | None = None
+    dry_run: bool = True
+    default_timezone: str = "+02:00"
+
+
+class ApkInstallRequest(BaseModel):
+    apk_paths: list[str]
+    dry_run: bool = True
+
+
+class DeeplinkProbeRequest(BaseModel):
+    urls: list[str]
+    dry_run: bool = True
+
+
+class DataPullRequest(BaseModel):
+    output_dir: str
+    dry_run: bool = True
+
+
+class CloudCrudPreviewRequest(BaseModel):
+    shifts: list[dict[str, Any]]
+    calendar_id: str
+    event_type: int = 0
+
+
+class SqliteWriteRequest(BaseModel):
+    shifts: list[dict[str, Any]]
+    calendar_row_id: int = 1
+    db_path: str = "/data/data/app.supershift/databases/Supershift.db"
+    dry_run: bool = True
+
+
+class SqliteTextWriteRequest(BaseModel):
+    text: str
+    calendar_row_id: int = 1
+    db_path: str = "/data/data/app.supershift/databases/Supershift.db"
     dry_run: bool = True
     default_timezone: str = "+02:00"
 
@@ -207,6 +253,79 @@ def android_supershift_status() -> dict[str, Any]:
 @app.get("/android/supershift/ui")
 def android_supershift_ui() -> dict[str, Any]:
     return read_supershift_ui()
+
+
+@app.get("/reverse/apk")
+def inspect_apk(
+    apk_path: str,
+    aapt_path: str = "aapt",
+    manifest_path: str | None = None,
+) -> dict[str, Any]:
+    return read_supershift_apk(apk_path, aapt_path, manifest_path)
+
+
+@app.get("/reverse/report")
+def reverse_report(
+    apktool_dir: str | None = None,
+    jadx_dir: str | None = None,
+) -> dict[str, Any]:
+    return read_reverse_engineering_report(apktool_dir, jadx_dir)
+
+
+@app.post("/android/supershift/install")
+def install_apks(payload: ApkInstallRequest) -> dict[str, Any]:
+    return write_supershift_apks(payload.apk_paths, payload.dry_run)
+
+
+@app.post("/android/supershift/deeplinks")
+def probe_deeplinks(payload: DeeplinkProbeRequest) -> dict[str, Any]:
+    return run_supershift_deeplink_probe(payload.urls, payload.dry_run)
+
+
+@app.get("/android/supershift/data")
+def data_access_status() -> dict[str, Any]:
+    return read_supershift_data_access_status()
+
+
+@app.post("/android/supershift/data/pull")
+def pull_data(payload: DataPullRequest) -> dict[str, Any]:
+    return run_supershift_data_pull(payload.output_dir, payload.dry_run)
+
+
+@app.post("/write/supershift/cloud/preview")
+def preview_cloud_crud(payload: CloudCrudPreviewRequest) -> dict[str, Any]:
+    return build_cloud_crud_preview(payload.shifts, payload.calendar_id, payload.event_type)
+
+
+@app.post("/write/supershift/sqlite/preview")
+def preview_sqlite_write(payload: SqliteWriteRequest) -> dict[str, Any]:
+    return build_sqlite_insert_plan(
+        payload.shifts,
+        payload.calendar_row_id,
+        payload.db_path,
+        dry_run=True,
+    )
+
+
+@app.post("/write/supershift/sqlite")
+def write_sqlite(payload: SqliteWriteRequest) -> dict[str, Any]:
+    return write_supershift_shifts_sqlite(
+        payload.shifts,
+        payload.calendar_row_id,
+        payload.db_path,
+        payload.dry_run,
+    )
+
+
+@app.post("/write/supershift/sqlite/text")
+def write_sqlite_text(payload: SqliteTextWriteRequest) -> dict[str, Any]:
+    return write_supershift_shifts_sqlite_from_text(
+        payload.text,
+        payload.calendar_row_id,
+        payload.db_path,
+        payload.dry_run,
+        default_timezone=payload.default_timezone,
+    )
 
 
 @app.post("/write/supershift")

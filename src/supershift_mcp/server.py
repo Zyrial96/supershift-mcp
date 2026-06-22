@@ -20,12 +20,22 @@ from supershift_mcp.calendar import summarize_shifts as summarize_calendar
 from supershift_mcp.calendar import unique_locations, unique_titles
 from supershift_mcp.writer import android_device_status as read_android_device_status
 from supershift_mcp.writer import build_android_calendar_intents
+from supershift_mcp.writer import build_cloud_crud_preview
+from supershift_mcp.writer import build_sqlite_insert_plan
 from supershift_mcp.writer import build_ui_automation_plan
 from supershift_mcp.writer import create_supershift_shifts as write_supershift_shifts
+from supershift_mcp.writer import create_supershift_shifts_sqlite as write_supershift_shifts_sqlite
+from supershift_mcp.writer import create_supershift_shifts_sqlite_from_text as write_supershift_shifts_sqlite_from_text
 from supershift_mcp.writer import create_supershift_shifts_from_text as write_supershift_shifts_from_text
 from supershift_mcp.writer import dump_supershift_ui as read_supershift_ui
+from supershift_mcp.writer import inspect_supershift_apk as read_supershift_apk
+from supershift_mcp.writer import install_supershift_apks as write_supershift_apks
 from supershift_mcp.writer import load_ui_profile
 from supershift_mcp.writer import parse_shift_text as parse_shift_lines
+from supershift_mcp.writer import probe_supershift_deeplinks as run_supershift_deeplink_probe
+from supershift_mcp.writer import pull_supershift_data as run_supershift_data_pull
+from supershift_mcp.writer import reverse_engineering_report as read_reverse_engineering_report
+from supershift_mcp.writer import supershift_data_access_status as read_supershift_data_access_status
 from supershift_mcp.writer import supershift_app_status as read_supershift_app_status
 from supershift_mcp.writer import validate_shift_drafts
 
@@ -221,6 +231,107 @@ def dump_supershift_ui() -> dict[str, Any]:
 
 
 @mcp.tool()
+def inspect_supershift_apk(
+    apk_path: str,
+    aapt_path: str = "aapt",
+    manifest_path: str | None = None,
+) -> dict[str, Any]:
+    """Inspect a Supershift APK for package, split, permission, and manifest evidence."""
+    return read_supershift_apk(apk_path, aapt_path, manifest_path)
+
+
+@mcp.tool()
+def supershift_reverse_engineering_report(
+    apktool_dir: str | None = None,
+    jadx_dir: str | None = None,
+) -> dict[str, Any]:
+    """Return the current reverse-engineering map for write-capable Supershift paths."""
+    return read_reverse_engineering_report(apktool_dir, jadx_dir)
+
+
+@mcp.tool()
+def install_supershift_apks(
+    apk_paths: list[str],
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Install Supershift base/split APKs through adb install-multiple. Defaults to dry-run."""
+    return write_supershift_apks(apk_paths, dry_run)
+
+
+@mcp.tool()
+def probe_supershift_deeplinks(
+    urls: list[str],
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Launch candidate Supershift deeplinks through ADB. Defaults to dry-run."""
+    return run_supershift_deeplink_probe(urls, dry_run)
+
+
+@mcp.tool()
+def supershift_data_access_status() -> dict[str, Any]:
+    """Check whether run-as or root can access Supershift app data on the connected device."""
+    return read_supershift_data_access_status()
+
+
+@mcp.tool()
+def pull_supershift_data(
+    output_dir: str,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Pull Supershift app data via run-as when the device permits it. Defaults to dry-run."""
+    return run_supershift_data_pull(output_dir, dry_run)
+
+
+@mcp.tool()
+def preview_supershift_cloud_crud(
+    shifts: list[dict[str, Any]],
+    calendar_id: str,
+    event_type: int = 0,
+) -> dict[str, Any]:
+    """Build an experimental Supershift Cloud v3/crud payload preview without sending it."""
+    return build_cloud_crud_preview(shifts, calendar_id, event_type)
+
+
+@mcp.tool()
+def preview_supershift_sqlite_write(
+    shifts: list[dict[str, Any]],
+    calendar_row_id: int = 1,
+    db_path: str = "/data/data/app.supershift/databases/Supershift.db",
+) -> dict[str, Any]:
+    """Build an experimental direct SQLite insert plan for rooted/emulated devices."""
+    return build_sqlite_insert_plan(shifts, calendar_row_id, db_path, dry_run=True)
+
+
+@mcp.tool()
+def create_supershift_sqlite_shifts(
+    shifts: list[dict[str, Any]],
+    calendar_row_id: int = 1,
+    db_path: str = "/data/data/app.supershift/databases/Supershift.db",
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Create shifts directly in Supershift.db on rooted/emulated devices. Defaults to dry-run."""
+    return write_supershift_shifts_sqlite(shifts, calendar_row_id, db_path, dry_run)
+
+
+@mcp.tool()
+def create_supershift_sqlite_shifts_from_text(
+    text: str,
+    calendar_row_id: int = 1,
+    db_path: str = "/data/data/app.supershift/databases/Supershift.db",
+    dry_run: bool = True,
+    default_timezone: str = "+02:00",
+) -> dict[str, Any]:
+    """Parse text and write shifts directly to Supershift.db on rooted/emulated devices."""
+    return write_supershift_shifts_sqlite_from_text(
+        text,
+        calendar_row_id,
+        db_path,
+        dry_run,
+        default_timezone=default_timezone,
+    )
+
+
+@mcp.tool()
 def preview_supershift_write(
     shifts: list[dict[str, Any]],
     backend: str = "adb_ui",
@@ -237,7 +348,9 @@ def preview_supershift_write(
             "commands": build_android_calendar_intents(shifts),
             "warning": "This opens Android Calendar insert intents, not the Supershift app.",
         }
-    raise ValueError("backend must be one of: adb_ui, android_calendar_intent.")
+    if backend == "cloud_crud_preview":
+        raise ValueError("Use preview_supershift_cloud_crud with calendar_id for cloud CRUD previews.")
+    raise ValueError("backend must be one of: adb_ui, android_calendar_intent, cloud_crud_preview.")
 
 
 @mcp.tool()
